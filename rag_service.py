@@ -5,7 +5,7 @@ from mysql.connector import Error
 app = Flask(__name__)
 
 DB_CONFIG = {
-    "host": "127.0.0.1",
+    "host": "31.97.221.62",
     "user": "www_gigaquit_user",
     "password": "fcuares111",
     "database": "www_gigaquit_db"
