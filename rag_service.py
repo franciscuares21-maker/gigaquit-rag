@@ -224,6 +224,7 @@ def answer_top_products():
             "source": "database"
         }
 
+    # FIXED: GROUP BY only p.id to avoid SQL errors
     rows = run_rows(f"""
         SELECT 
             p.{name_column} AS name,
@@ -231,7 +232,7 @@ def answer_top_products():
             COALESCE(SUM(oi.subtotal), 0) AS total_sales
         FROM order_items oi
         LEFT JOIN products p ON oi.product_id = p.id
-        GROUP BY p.id, p.{name_column}
+        GROUP BY p.id
         ORDER BY total_sold DESC, total_sales DESC
         LIMIT 5
     """)
