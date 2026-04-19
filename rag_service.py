@@ -526,22 +526,20 @@ def generate_answer(question: str):
     return result
 
 
+@app.route("/", methods=["GET"])
+def root():
+    return jsonify({
+        "success": True,
+        "message": "Gigaquit RAG service is live."
+    })
+
+
 @app.route("/health", methods=["GET"])
 def health():
-    try:
-        conn = get_db_connection()
-        conn.close()
-        return jsonify({
-            "success": True,
-            "message": "RAG service is running.",
-            "database": "connected"
-        })
-    except Error as e:
-        return jsonify({
-            "success": False,
-            "message": "RAG service is running but database connection failed.",
-            "error": str(e)
-        }), 500
+    return jsonify({
+        "success": True,
+        "message": "RAG service is running."
+    })
 
 
 @app.route("/ask", methods=["POST"])
