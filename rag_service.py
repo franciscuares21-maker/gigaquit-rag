@@ -396,15 +396,25 @@ def root():
 def health():
     try:
         conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT DATABASE()")
+        current_db = cursor.fetchone()
+        cursor.close()
         conn.close()
+
         return jsonify({
             "success": True,
-            "message": "RAG service and database are running"
+            "message": "RAG service and database are running",
+            "database": current_db[0] if current_db else None,
+            "db_host": DB_CONFIG.get("host"),
+            "db_name": DB_CONFIG.get("database")
         })
     except Exception as e:
         return jsonify({
             "success": False,
             "message": "Database connection failed",
+            "db_host": DB_CONFIG.get("host"),
+            "db_name": DB_CONFIG.get("database"),
             "error": str(e)
         }), 500
 
