@@ -10,9 +10,25 @@ BRIDGE_URL = os.getenv(
 )
 
 
-def bridge_get(action):
+def bridge_get(action, extra_params=None):
     try:
-        res = requests.get(BRIDGE_URL, params={"action": action}, timeout=10)
+        params = {"action": action}
+        if extra_params:
+            params.update(extra_params)
+
+        res = requests.get(BRIDGE_URL, params=params, timeout=10)
+        return res.json()
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def bridge_post(action, payload=None):
+    try:
+        res = requests.post(
+            BRIDGE_URL + f"?action={action}",
+            json=payload or {},
+            timeout=10
+        )
         return res.json()
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -25,78 +41,115 @@ def money(value):
         return "₱0.00"
 
 
+def save_query(question, answer, user_id):
+    try:
+        bridge_post("save_query", {
+            "question": question,
+            "answer": answer,
+            "user_id": user_id or 0
+        })
+    except Exception:
+        pass
+
+
+def get_last_query(user_id):
+    try:
+        data = bridge_get("last_query", {"user_id": user_id or 0})
+        return data.get("data")
+    except Exception:
+        return None
+
+
+def get_history(user_id):
+    try:
+        data = bridge_get("get_history", {"user_id": user_id or 0})
+        return data.get("data", [])
+    except Exception:
+        return []
+
+
 def detect_intent(question):
     q = question.lower().strip()
 
+    if "last question" in q or "what did i ask" in q or "unsa akong gipangutana" in q:
+        return "memory_question"
+
+    if "repeat" in q or "last answer" in q or "previous answer" in q:
+        return "memory_answer"
+
     if "business summary" in q or "system summary" in q or "overall summary" in q:
         return "business_summary"
-    if "cheapest" in q or "lowest price" in q or "highest stock" in q or "lowest stock product" in q or "most expensive" in q:
+
+    if "cheapest" in q or "lowest price" in q or "barato" in q:
+        return "cheap_products"
+
+    if "highest stock" in q or "daghan stock" in q:
+        return "high_stock"
+
+    if "run out" in q or "low stock soon" in q or "mahurot" in q:
+        return "prediction"
+
+    if "most expensive" in q or "highest price" in q:
         return "product_stats"
+
     if "overview" in q or "database" in q or "tables" in q:
         return "database_overview"
+
     if "gigaquit rhum" in q or "what is this system" in q or "about system" in q:
         return "system_info"
+
     if "history" in q or "origin" in q or "heritage" in q:
         return "history_info"
+
     if "total users" in q or "how many users" in q or "registered users" in q:
         return "total_users"
+
     if "role" in q:
         return "role_counts"
+
     if "farmers" in q and "sap" not in q:
         return "farmers"
+
     if "producers" in q:
         return "producers"
+
     if "customers" in q:
         return "customers"
+
     if "show products" in q or "available products" in q or "products" in q:
         return "products"
+
     if "low stock" in q or "out of stock" in q:
         return "low_stock"
+
     if "top selling" in q or "top-selling" in q or "best selling" in q or "best-selling" in q:
         return "top_products"
+
     if "recent orders" in q or "latest orders" in q:
         return "recent_orders"
+
     if "revenue" in q or "sales" in q or "orders summary" in q or "total orders" in q:
         return "orders_summary"
+
     if "sap summary" in q or "sap total" in q:
         return "sap_summary"
+
     if "sap" in q and ("purchase" in q or "recent" in q or "sales" in q):
         return "recent_sap_purchases"
+
     if "reviews" in q or "ratings" in q:
         return "product_reviews"
 
     return "unknown"
 
-def save_query(question, answer, user_id):
-    try:
-        requests.post(
-            BRIDGE_URL + "?action=save_query",
-            json={
-                "question": question,
-                "answer": answer,
-                "user_id": user_id
-            },
-            timeout=5
-        )
-    except:
-        pass
-
-def get_history(user_id):
-    try:
-        res = requests.get(
-            BRIDGE_URL,
-            params={"action": "get_history", "user_id": user_id},
-            timeout=5
-        )
-        return res.json().get("data", [])
-    except:
-        return []
-        
 
 def lines(title, rows, formatter, empty):
     if not rows:
         return {"answer": empty, "source": "php_bridge"}
-    return {"answer": title + "\n" + "\n".join(formatter(r) for r in rows), "source": "php_bridge"}
+    return {
+        "answer": title + "\n" + "\n".join(formatter(r) for r in rows),
+        "source": "php_bridge"
+    }
 
 
 def answer_system_info():
@@ -121,10 +174,33 @@ def answer_history_info():
     }
 
 
+def answer_memory_question(user_id):
+    data = get_last_query(user_id)
+    if data:
+        return {
+            "answer": f"Your last question was: {data.get('question', 'No question found.')}",
+            "source": "memory"
+        }
+    return {"answer": "No previous question found.", "source": "memory"}
+
+
+def answer_memory_answer(user_id):
+    data = get_last_query(user_id)
+    if data:
+        return {
+            "answer": f"My last answer was:\n{data.get('answer', 'No answer found.')}",
+            "source": "memory"
+        }
+    return {"answer": "No previous answer found.", "source": "memory"}
+
+
 def answer_total_users():
     d = bridge_get("total_users")
     total = d.get("data", {}).get("total_users", 0)
-    return {"answer": f"There are currently {total} registered users in the system.", "source": "php_bridge"}
+    return {
+        "answer": f"There are currently {total} registered users in the system.",
+        "source": "php_bridge"
+    }
 
 
 def answer_role_counts():
@@ -177,6 +253,39 @@ def answer_product_stats():
     }
 
 
+def answer_cheap_products():
+    d = bridge_get("filter_products", {"type": "cheap"})
+    rows = d.get("data", [])
+    return lines(
+        "Cheapest products:",
+        rows,
+        lambda r: f"- {r.get('name','Unnamed Product')} | Price: {money(r.get('price'))}",
+        "No cheap product data found."
+    )
+
+
+def answer_high_stock():
+    d = bridge_get("filter_products", {"type": "high_stock"})
+    rows = d.get("data", [])
+    return lines(
+        "Products with highest stock:",
+        rows,
+        lambda r: f"- {r.get('name','Unnamed Product')} | Stock: {r.get('stock',0)} units",
+        "No high-stock product data found."
+    )
+
+
+def answer_prediction():
+    d = bridge_get("prediction_low_stock")
+    rows = d.get("data", [])
+    return lines(
+        "Products likely to run out soon:",
+        rows,
+        lambda r: f"- {r.get('name','Unnamed Product')} | Remaining: {r.get('stock_quantity',0)}",
+        "No product is currently at high risk of running out."
+    )
+
+
 def answer_low_stock():
     d = bridge_get("low_stock")
     return lines(
@@ -207,7 +316,13 @@ def answer_recent_orders():
     return lines(
         "Recent orders:",
         d.get("data", []),
-        lambda r: f"- {r.get('order_number','Order')} | {r.get('customer_name','Unknown')} | {money(r.get('total_amount'))} | {r.get('status','N/A')} | {r.get('payment_status','N/A')}",
+        lambda r: (
+            f"- {r.get('order_number','Order')} | "
+            f"{r.get('customer_name','Unknown')} | "
+            f"{money(r.get('total_amount'))} | "
+            f"{r.get('status','N/A')} | "
+            f"{r.get('payment_status','N/A')}"
+        ),
         "No recent orders found."
     )
 
@@ -227,7 +342,13 @@ def answer_recent_sap_purchases():
     return lines(
         "Recent SAP purchases:",
         d.get("data", []),
-        lambda r: f"- Farmer: {r.get('farmer_name','Unknown')} | Producer: {r.get('producer_name','Unknown')} | Qty: {r.get('quantity',0)} L | Amount: {money(r.get('total_amount'))} | Date: {r.get('created_at','')}",
+        lambda r: (
+            f"- Farmer: {r.get('farmer_name','Unknown')} | "
+            f"Producer: {r.get('producer_name','Unknown')} | "
+            f"Qty: {r.get('quantity',0)} L | "
+            f"Amount: {money(r.get('total_amount'))} | "
+            f"Date: {r.get('created_at','')}"
+        ),
         "No recent SAP purchases found."
     )
 
@@ -277,26 +398,33 @@ def answer_database_overview():
     data = d.get("data", {})
     if not data:
         return {"answer": "No database overview available.", "source": "php_bridge"}
-    return {"answer": "Database overview:\n" + "\n".join([f"- {k}: {v} records" for k, v in data.items()]), "source": "php_bridge"}
+
+    return {
+        "answer": "Database overview:\n" + "\n".join([f"- {k}: {v} records" for k, v in data.items()]),
+        "source": "php_bridge"
+    }
 
 
 def answer_unknown():
     return {
         "answer": (
             "I can answer business questions such as: show products, cheapest product, highest stock, "
-            "low stock products, top selling products, total revenue, recent orders, SAP summary, "
-            "recent SAP purchases, role counts, farmers, producers, customers, and business summary."
+            "low stock products, products likely to run out soon, top selling products, total revenue, "
+            "recent orders, SAP summary, recent SAP purchases, role counts, farmers, producers, customers, "
+            "business summary, database overview, and memory questions like 'what did I ask earlier?'."
         ),
         "source": "assistant"
     }
 
 
-def generate_answer(question):
+def generate_answer(question, user_id=0):
     intent = detect_intent(question)
 
     handlers = {
         "system_info": answer_system_info,
         "history_info": answer_history_info,
+        "memory_question": lambda: answer_memory_question(user_id),
+        "memory_answer": lambda: answer_memory_answer(user_id),
         "total_users": answer_total_users,
         "role_counts": answer_role_counts,
         "farmers": lambda: answer_people("farmers", "Farmers:"),
@@ -304,6 +432,9 @@ def generate_answer(question):
         "customers": lambda: answer_people("customers", "Customers:"),
         "products": answer_products,
         "product_stats": answer_product_stats,
+        "cheap_products": answer_cheap_products,
+        "high_stock": answer_high_stock,
+        "prediction": answer_prediction,
         "low_stock": answer_low_stock,
         "orders_summary": answer_orders_summary,
         "recent_orders": answer_recent_orders,
@@ -333,7 +464,11 @@ def health():
 @app.route("/bridge-health", methods=["GET"])
 def bridge_health():
     data = bridge_get("health")
-    return jsonify({"success": bool(data.get("success")), "message": "Bridge checked.", "bridge_response": data})
+    return jsonify({
+        "success": bool(data.get("success")),
+        "message": "Bridge checked.",
+        "bridge_response": data
+    })
 
 
 @app.route("/ask", methods=["POST"])
@@ -345,9 +480,8 @@ def ask():
     if not question:
         return jsonify({"success": False, "answer": "Question is required."}), 400
 
-    result = generate_answer(question)
+    result = generate_answer(question, user_id)
 
-    # SAVE HISTORY 🔥
     save_query(question, result["answer"], user_id)
 
     return jsonify({
@@ -355,5 +489,13 @@ def ask():
         "question": question,
         "answer": result["answer"],
         "source": result["source"],
-        "intent": result["intent"]
+        "intent": result["intent"],
+        "user_id": user_id,
+        "role": data.get("role", "guest"),
+        "user_name": data.get("user_name", "Guest")
     })
+
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", "5000"))
+    app.run(host="0.0.0.0", port=port)
