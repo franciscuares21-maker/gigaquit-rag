@@ -28,6 +28,10 @@ def money(value):
 def detect_intent(question):
     q = question.lower().strip()
 
+    if "business summary" in q or "system summary" in q or "overall summary" in q:
+        return "business_summary"
+    if "cheapest" in q or "lowest price" in q or "highest stock" in q or "lowest stock product" in q or "most expensive" in q:
+        return "product_stats"
     if "overview" in q or "database" in q or "tables" in q:
         return "database_overview"
     if "gigaquit rhum" in q or "what is this system" in q or "about system" in q:
@@ -36,7 +40,7 @@ def detect_intent(question):
         return "history_info"
     if "total users" in q or "how many users" in q or "registered users" in q:
         return "total_users"
-    if "role" in q or "farmers producers customers" in q:
+    if "role" in q:
         return "role_counts"
     if "farmers" in q and "sap" not in q:
         return "farmers"
@@ -44,8 +48,6 @@ def detect_intent(question):
         return "producers"
     if "customers" in q:
         return "customers"
-    if "recent users" in q or "latest users" in q:
-        return "recent_users"
     if "show products" in q or "available products" in q or "products" in q:
         return "products"
     if "low stock" in q or "out of stock" in q:
@@ -60,23 +62,24 @@ def detect_intent(question):
         return "sap_summary"
     if "sap" in q and ("purchase" in q or "recent" in q or "sales" in q):
         return "recent_sap_purchases"
-    if "sap inventory" in q or "sap stock" in q or "sap submissions" in q:
-        return "sap_inventory"
     if "reviews" in q or "ratings" in q:
         return "product_reviews"
-    if "knowledge" in q or "databank" in q:
-        return "knowledge_base"
 
     return "unknown"
+
+
+def lines(title, rows, formatter, empty):
+    if not rows:
+        return {"answer": empty, "source": "php_bridge"}
+    return {"answer": title + "\n" + "\n".join(formatter(r) for r in rows), "source": "php_bridge"}
 
 
 def answer_system_info():
     return {
         "answer": (
             "Gigaquit Rhum is a databank and marketplace system for the local rhum industry of "
-            "Gigaquit, Surigao del Norte. It connects farmers, producers, customers, and administrators "
-            "in one platform. It supports SAP supply management, product selling, order tracking, "
-            "payments, reports, and an AI-powered RAG assistant."
+            "Gigaquit, Surigao del Norte. It connects farmers, producers, customers, and administrators. "
+            "It supports SAP supply, products, orders, payments, reports, and AI-powered databank insights."
         ),
         "source": "knowledge_base"
     }
@@ -85,18 +88,12 @@ def answer_system_info():
 def answer_history_info():
     return {
         "answer": (
-            "Gigaquit Rhum reflects local craftsmanship, agricultural identity, and rhum-making culture "
-            "of Gigaquit, Surigao del Norte. The system modernizes this local industry through a digital "
-            "databank and marketplace."
+            "Gigaquit Rhum reflects the local craftsmanship, agricultural identity, and rhum-making culture "
+            "of Gigaquit, Surigao del Norte. The system helps modernize the local industry using a digital "
+            "marketplace and databank."
         ),
         "source": "knowledge_base"
     }
-
-
-def list_lines(title, rows, formatter, empty):
-    if not rows:
-        return {"answer": empty, "source": "php_bridge"}
-    return {"answer": title + "\n" + "\n".join(formatter(r) for r in rows), "source": "php_bridge"}
 
 
 def answer_total_users():
@@ -107,10 +104,9 @@ def answer_total_users():
 
 def answer_role_counts():
     d = bridge_get("role_counts")
-    rows = d.get("data", [])
-    return list_lines(
+    return lines(
         "Current user role counts:",
-        rows,
+        d.get("data", []),
         lambda r: f"- {str(r.get('role','Unknown')).replace('_',' ').title()}: {r.get('total',0)}",
         "No role data found."
     )
@@ -118,10 +114,9 @@ def answer_role_counts():
 
 def answer_people(action, title):
     d = bridge_get(action)
-    rows = d.get("data", [])
-    return list_lines(
+    return lines(
         title,
-        rows,
+        d.get("data", []),
         lambda r: f"- {r.get('full_name','Unknown')} ({r.get('email','No email')})",
         f"No {title.lower()} found."
     )
@@ -129,21 +124,39 @@ def answer_people(action, title):
 
 def answer_products():
     d = bridge_get("products")
-    rows = d.get("data", [])
-    return list_lines(
+    return lines(
         "Available products:",
-        rows,
+        d.get("data", []),
         lambda r: f"- {r.get('name','Unnamed Product')} | Price: {money(r.get('price'))} | Stock: {r.get('stock',0)}",
         "No products found."
     )
 
 
+def answer_product_stats():
+    d = bridge_get("product_stats")
+    x = d.get("data", {})
+    c = x.get("cheapest") or {}
+    e = x.get("most_expensive") or {}
+    hs = x.get("highest_stock") or {}
+    ls = x.get("lowest_stock") or {}
+
+    return {
+        "answer": (
+            "Product analytics:\n"
+            f"- Cheapest product: {c.get('name','N/A')} at {money(c.get('price'))}\n"
+            f"- Most expensive product: {e.get('name','N/A')} at {money(e.get('price'))}\n"
+            f"- Highest stock: {hs.get('name','N/A')} with {hs.get('stock',0)} units\n"
+            f"- Lowest stock: {ls.get('name','N/A')} with {ls.get('stock',0)} units"
+        ),
+        "source": "php_bridge"
+    }
+
+
 def answer_low_stock():
     d = bridge_get("low_stock")
-    rows = d.get("data", [])
-    return list_lines(
+    return lines(
         "Low-stock products:",
-        rows,
+        d.get("data", []),
         lambda r: f"- {r.get('name','Unnamed Product')}: {r.get('stock',0)} remaining",
         "There are currently no low-stock products."
     )
@@ -166,10 +179,9 @@ def answer_orders_summary():
 
 def answer_recent_orders():
     d = bridge_get("recent_orders")
-    rows = d.get("data", [])
-    return list_lines(
+    return lines(
         "Recent orders:",
-        rows,
+        d.get("data", []),
         lambda r: f"- {r.get('order_number','Order')} | {r.get('customer_name','Unknown')} | {money(r.get('total_amount'))} | {r.get('status','N/A')} | {r.get('payment_status','N/A')}",
         "No recent orders found."
     )
@@ -177,10 +189,9 @@ def answer_recent_orders():
 
 def answer_top_products():
     d = bridge_get("top_products")
-    rows = d.get("data", [])
-    return list_lines(
+    return lines(
         "Top-selling products:",
-        rows,
+        d.get("data", []),
         lambda r: f"- {r.get('name','Unnamed Product')} | Sold: {r.get('total_sold',0)} | Sales: {money(r.get('total_sales',0))}",
         "No top-selling product data found."
     )
@@ -188,23 +199,11 @@ def answer_top_products():
 
 def answer_recent_sap_purchases():
     d = bridge_get("recent_sap_purchases")
-    rows = d.get("data", [])
-    return list_lines(
+    return lines(
         "Recent SAP purchases:",
-        rows,
+        d.get("data", []),
         lambda r: f"- Farmer: {r.get('farmer_name','Unknown')} | Producer: {r.get('producer_name','Unknown')} | Qty: {r.get('quantity',0)} L | Amount: {money(r.get('total_amount'))} | Date: {r.get('created_at','')}",
         "No recent SAP purchases found."
-    )
-
-
-def answer_sap_inventory():
-    d = bridge_get("sap_inventory")
-    rows = d.get("data", [])
-    return list_lines(
-        "SAP inventory records:",
-        rows,
-        lambda r: f"- Farmer: {r.get('farmer_name','Unknown')} | Submitted: {r.get('quantity_liters',0)} L | Purchased: {r.get('purchased_liters',0)} L | Remaining: {r.get('remaining_liters',0)} L | Status: {r.get('availability_status','N/A')}",
-        "No SAP inventory records found."
     )
 
 
@@ -224,24 +223,28 @@ def answer_sap_summary():
 
 def answer_reviews():
     d = bridge_get("product_reviews")
-    rows = d.get("data", [])
-    return list_lines(
+    return lines(
         "Recent product reviews:",
-        rows,
+        d.get("data", []),
         lambda r: f"- Rating: {r.get('rating','N/A')} | Customer: {r.get('customer_name','Unknown')} | Review: {r.get('review','')}",
         "No product reviews found."
     )
 
 
-def answer_knowledge_base():
-    d = bridge_get("knowledge_base")
-    rows = d.get("data", [])
-    return list_lines(
-        "Knowledge base records:",
-        rows,
-        lambda r: "- " + " | ".join([f"{k}: {v}" for k, v in r.items() if v is not None]),
-        "No knowledge base records found."
-    )
+def answer_business_summary():
+    d = bridge_get("business_summary")
+    x = d.get("data", {})
+    return {
+        "answer": (
+            "Business summary:\n"
+            f"- Registered users: {x.get('users',0)}\n"
+            f"- Products: {x.get('products',0)}\n"
+            f"- Orders: {x.get('orders',0)}\n"
+            f"- Revenue: {money(x.get('revenue',0))}\n"
+            f"- Low-stock products: {x.get('low_stock',0)}"
+        ),
+        "source": "php_bridge"
+    }
 
 
 def answer_database_overview():
@@ -249,17 +252,15 @@ def answer_database_overview():
     data = d.get("data", {})
     if not data:
         return {"answer": "No database overview available.", "source": "php_bridge"}
-
-    lines = [f"- {table}: {count} records" for table, count in data.items()]
-    return {"answer": "Database overview:\n" + "\n".join(lines), "source": "php_bridge"}
+    return {"answer": "Database overview:\n" + "\n".join([f"- {k}: {v} records" for k, v in data.items()]), "source": "php_bridge"}
 
 
 def answer_unknown():
     return {
         "answer": (
-            "I can answer questions about users, roles, farmers, producers, customers, products, low stock, "
-            "orders, revenue, recent orders, top-selling products, SAP purchases, SAP inventory, SAP summary, "
-            "reviews, knowledge base, and database overview."
+            "I can answer business questions such as: show products, cheapest product, highest stock, "
+            "low stock products, top selling products, total revenue, recent orders, SAP summary, "
+            "recent SAP purchases, role counts, farmers, producers, customers, and business summary."
         ),
         "source": "assistant"
     }
@@ -273,20 +274,19 @@ def generate_answer(question):
         "history_info": answer_history_info,
         "total_users": answer_total_users,
         "role_counts": answer_role_counts,
-        "recent_users": lambda: answer_people("recent_users", "Recent users:"),
         "farmers": lambda: answer_people("farmers", "Farmers:"),
         "producers": lambda: answer_people("producers", "Producers:"),
         "customers": lambda: answer_people("customers", "Customers:"),
         "products": answer_products,
+        "product_stats": answer_product_stats,
         "low_stock": answer_low_stock,
         "orders_summary": answer_orders_summary,
         "recent_orders": answer_recent_orders,
         "top_products": answer_top_products,
         "recent_sap_purchases": answer_recent_sap_purchases,
-        "sap_inventory": answer_sap_inventory,
         "sap_summary": answer_sap_summary,
         "product_reviews": answer_reviews,
-        "knowledge_base": answer_knowledge_base,
+        "business_summary": answer_business_summary,
         "database_overview": answer_database_overview,
     }
 
