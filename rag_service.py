@@ -67,6 +67,31 @@ def detect_intent(question):
 
     return "unknown"
 
+def save_query(question, answer, user_id):
+    try:
+        requests.post(
+            BRIDGE_URL + "?action=save_query",
+            json={
+                "question": question,
+                "answer": answer,
+                "user_id": user_id
+            },
+            timeout=5
+        )
+    except:
+        pass
+
+def get_history(user_id):
+    try:
+        res = requests.get(
+            BRIDGE_URL,
+            params={"action": "get_history", "user_id": user_id},
+            timeout=5
+        )
+        return res.json().get("data", [])
+    except:
+        return []
+        
 
 def lines(title, rows, formatter, empty):
     if not rows:
@@ -315,24 +340,20 @@ def bridge_health():
 def ask():
     data = request.get_json(silent=True) or {}
     question = str(data.get("question", "")).strip()
+    user_id = data.get("user_id", 0)
 
     if not question:
         return jsonify({"success": False, "answer": "Question is required."}), 400
 
     result = generate_answer(question)
 
+    # SAVE HISTORY 🔥
+    save_query(question, result["answer"], user_id)
+
     return jsonify({
         "success": True,
         "question": question,
         "answer": result["answer"],
         "source": result["source"],
-        "intent": result["intent"],
-        "user_id": data.get("user_id"),
-        "role": data.get("role", "guest"),
-        "user_name": data.get("user_name", "Guest")
+        "intent": result["intent"]
     })
-
-
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", "5000"))
-    app.run(host="0.0.0.0", port=port)
