@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 import os
 import mysql.connector
-from mysql.connector import Error
 
 app = Flask(__name__)
 
@@ -79,34 +78,24 @@ def detect_intent(question):
 
     if "gigaquit rhum" in q or "what is this system" in q or "about system" in q:
         return "system_info"
-
     if "history" in q or "origin" in q or "heritage" in q:
         return "history_info"
-
     if "show products" in q or "available products" in q or "products" in q:
         return "product_info"
-
     if "producer" in q or "producers" in q:
         return "producer_info"
-
     if "total users" in q or "how many users" in q or "registered users" in q:
         return "total_users"
-
     if "role counts" in q or "user counts" in q or ("farmers" in q and "producers" in q and "customers" in q):
         return "role_counts"
-
     if "total revenue" in q or "overall revenue" in q or "revenue" in q:
         return "total_revenue"
-
     if "orders" in q or "total orders" in q or "pending orders" in q:
         return "orders_summary"
-
     if "top selling" in q or "top-selling" in q or "best selling" in q or "best-selling" in q:
         return "top_products"
-
     if "low stock" in q or "out of stock" in q:
         return "low_stock"
-
     if "sap purchases" in q or "recent sap purchases" in q or "sap sales" in q or "sap purchase" in q:
         return "sap_purchases"
 
@@ -448,23 +437,30 @@ def root():
 
 @app.route("/health", methods=["GET"])
 def health():
+    return jsonify({
+        "success": True,
+        "message": "RAG service is running.",
+        "database": "not_checked"
+    })
+
+
+@app.route("/db-health", methods=["GET"])
+def db_health():
     try:
         conn = get_db_connection()
         conn.close()
-
         return jsonify({
             "success": True,
-            "message": "RAG service is running.",
+            "message": "Database connected.",
             "database": "connected"
         })
-
-    except Error as e:
+    except Exception as e:
         return jsonify({
-            "success": True,
-            "message": "Health route is working.",
+            "success": False,
+            "message": "Database connection failed.",
             "database": "not_connected",
             "error": str(e)
-        })
+        }), 500
 
 
 @app.route("/ask", methods=["POST"])
